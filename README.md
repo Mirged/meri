@@ -48,10 +48,10 @@ cargo run -- examples/sample_program.meri --print-usage
 Write your Meri assembly code in a text file with the `.meri` extension. Example:
 
 ```assembly
-MovRegReg 0 1
-AddRegReg 2 3
-JmpAddr 5
-HLT
+MovRegReg 0 1;
+AddRegReg 2 3;
+JmpAddr 5;
+HLT;
 ```
 
 ## Contributing
