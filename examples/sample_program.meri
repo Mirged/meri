@@ -1,2 +1,3 @@
 IncReg 1;
 MovRegReg 0 1;
+HLT;
