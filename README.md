@@ -36,7 +36,7 @@ cargo run -- <path-to-your-assembly-file>
 For example:
 
 ```bash
-cargo run -- examles/sample_program.meri --print-usage
+cargo run -- examples/sample_program.meri --print-usage
 ```
 
 ### Options
