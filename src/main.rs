@@ -62,7 +62,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        println!("AssA emulator");
+        println!("Meri emulator");
         println!("Usage:\n {} <file_path> [OPTIONS]", args[0]);
         println!("OPTIONS:\n --print-state - Print CPU state after program execution");
         return;
