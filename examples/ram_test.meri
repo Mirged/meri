@@ -1,0 +1,13 @@
+IncMem 0;
+IncMem 0;
+MovRegMem 0 0;
+MovRegReg 1 0;
+
+AddMemReg 0 0;
+AddMemReg 0 0;
+AddMemReg 0 0;
+
+MovRegMem 0 0;
+MovRegMem 1 0;
+MovRegMem 2 0;
+MovRegMem 3 0;

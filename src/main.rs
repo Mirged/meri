@@ -25,7 +25,15 @@ fn lexer(mut source: String) -> Vec<u8> {
                 "IncReg" => 3,
                 "DecReg" => 4,
                 "JmpAddr" => 5,
-                "HLT" => 6,
+                "MovRegMem" => 6,
+                "MovMemReg" => 7,
+                "AddRegMem" => 8,
+                "AddMemReg" => 9,
+                "SubRegMem" => 10,
+                "SubMemReg" => 11,
+                "IncMem" => 12,
+                "DecMem" => 13,
+                "HLT" => 14,
                 _ => panic!("Unknown opcode: {}", opcode_str),
             };
 
@@ -45,6 +53,7 @@ fn lexer(mut source: String) -> Vec<u8> {
     }
     program
 }
+
 
 
 fn main() {
