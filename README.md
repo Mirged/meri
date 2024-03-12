@@ -41,7 +41,7 @@ cargo run -- examples/sample_program.meri --print-state
 
 ### Options
 
-- `--print-usage`: Print CPU state after program execution.
+- `--print-state`: Print CPU state after program execution.
 
 ## Writing Meri Assembly Code
 
