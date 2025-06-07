@@ -4,14 +4,12 @@ use std::io::prelude::*;
 use std::path::Path;
 mod run;
 
-
-fn parse_operand(operand: &str) -> u8 {
-    operand.parse().unwrap_or_else(|_| {
-        panic!("Failed to parse operand: {}", operand);
-    })
+// Changed to return a Result for better error handling
+fn parse_operand(operand: &str) -> Result<u8, String> {
+    operand.parse().map_err(|e| format!("Failed to parse operand '{}': {}", operand, e))
 }
 
-fn lexer(mut source: String) -> Vec<u8> {
+fn lexer(mut source: String) -> Result<Vec<u8>, String> {
     let mut program = Vec::new();
     source.retain(|c| c != '\n');
     let parts = source.split(";");
@@ -34,12 +32,12 @@ fn lexer(mut source: String) -> Vec<u8> {
                 "IncMem" => 12,
                 "DecMem" => 13,
                 "HLT" => 14,
-                _ => panic!("Unknown opcode: {}", opcode_str),
+                _ => return Err(format!("Unknown opcode: {}", opcode_str)), // Return error for unknown opcode
             };
 
             let mut operands = Vec::new();
             while let Some(operand_str) = tokens.next() {
-                operands.push(parse_operand(operand_str));
+                operands.push(parse_operand(operand_str)?); // Use '?' to propagate errors from parse_operand
             }
 
             // Add default operands (0) for instructions with missing operands
@@ -51,14 +49,10 @@ fn lexer(mut source: String) -> Vec<u8> {
             program.extend_from_slice(&instruction);
         }
     }
-    program
+    Ok(program)
 }
 
-
-
 fn main() {
-
-
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
@@ -85,16 +79,25 @@ fn main() {
     let display = path.display();
 
     let mut file = match File::open(&path) {
-        Err(why) => panic!("Couldn't open {}: {}", display, why),
-        Ok(file) => file
+        Err(why) => {
+            eprintln!("Error: Couldn't open {}: {}", display, why); // Use eprintln for errors
+            return;
+        }
+        Ok(file) => file,
     };
 
     let mut source = String::new();
-    match file.read_to_string(&mut source) {
-        Err(why) => panic!("Couldn't read {}: {}", display, why),
-        _ => {}
+    if let Err(why) = file.read_to_string(&mut source) {
+        eprintln!("Error: Couldn't read {}: {}", display, why); // Use eprintln for errors
+        return;
     }
 
-    let program = lexer(source);
+    let program = match lexer(source) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Lexer error: {}", e);
+            return;
+        }
+    };
     run::run_emulation(program, print_usage);
 }
