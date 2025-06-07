@@ -15,7 +15,7 @@ Ensure that you have Rust installed on your system. If not, you can install it f
 Clone the repository to your local machine:
 
 ```bash
-git clone https://github.com/your-username/meri.git
+git clone https://github.com/Mirged/meri.git
 cd meri
 ```
 
