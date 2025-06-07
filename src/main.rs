@@ -41,107 +41,140 @@ fn parse_reg_mem_operand(operand_str: &str) -> Result<(u8, OperandType), String>
 // The lexer function converts human-readable assembly source code into a byte vector
 // that the Meri CPU emulator can execute.
 // It now handles the new generalized instruction syntax and encodes addressing modes.
-fn lexer(mut source: String) -> Result<Vec<u8>, String> {
+fn lexer(source: String) -> Result<Vec<u8>, String> {
     let mut program = Vec::new();
-    source.retain(|c| c != '\n'); // Remove newline characters for simpler splitting.
-    let lines: Vec<&str> = source.split(";").collect(); // Split the source code into individual instruction lines by semicolon.
     
-    // Process each line (instruction) individually.
-    for part in lines {
-        let trimmed_part = part.trim(); // Remove leading/trailing whitespace from the instruction line.
-        if trimmed_part.is_empty() { // Skip empty lines, e.g., if there's a trailing semicolon.
+    // Split the source code into individual lines first, and track line numbers
+    for (line_num, line) in source.lines().enumerate() {
+        // Ignore anything after a "//" comment
+        let instruction_part = line.split("//").next().unwrap_or("").trim();
+
+        // Skip empty lines or lines that were entirely comments
+        if instruction_part.is_empty() {
             continue;
         }
 
-        // Split the instruction line into tokens (opcode and operands).
-        let mut tokens = trimmed_part.split_whitespace();
-        // The first token is expected to be the opcode string.
-        let opcode_str = tokens.next().ok_or_else(|| "Empty instruction line.".to_string())?;
+        // Split the instruction line by semicolon to handle multiple instructions on one line
+        // (though current examples usually have one per line)
+        let parts: Vec<&str> = instruction_part.split(";").collect();
 
-        // All instructions are now 4 bytes: [opcode, mode_byte, operand1_val, operand2_val].
-        // Initialize with default values.
-        let (mut opcode_val, mut mode_byte, mut operand1_val, mut operand2_val) = (0, 0, 0, 0);
+        for part in parts {
+            let trimmed_part = part.trim(); // Remove leading/trailing whitespace
+            if trimmed_part.is_empty() {
+                continue;
+            }
 
-        // Match on the opcode string to determine instruction type and parse operands.
-        match opcode_str {
-            "Mov" | "Add" | "Sub" => {
-                // These instructions expect two operands (destination and source).
-                let dest_str = tokens.next().ok_or_else(|| format!("Missing destination operand for instruction '{}'. Expected format: {} <DEST> <SOURCE>", opcode_str, opcode_str))?;
-                let src_str = tokens.next().ok_or_else(|| format!("Missing source operand for instruction '{}'. Expected format: {} <DEST> <SOURCE>", opcode_str, opcode_str))?;
+            // Split the instruction line into tokens (opcode and operands).
+            let mut tokens = trimmed_part.split_whitespace();
+            // The first token is expected to be the opcode string.
+            let opcode_str = tokens.next().ok_or_else(|| format!("Line {}: Empty instruction part after semicolon.", line_num + 1))?;
 
-                // Parse destination and source operands using the helper function.
-                let (dest_val, dest_type) = parse_reg_mem_operand(dest_str)?;
-                let (src_val, src_type) = parse_reg_mem_operand(src_str)?;
+            // Variables to hold the components of the 4-byte instruction.
+            let instruction_bytes: [u8; 4] = match opcode_str {
+                "Mov" | "Add" | "Sub" | "Cmp" => { // Cmp added here
+                    // These instructions expect two operands (destination and source).
+                    let dest_str = tokens.next().ok_or_else(|| format!("Line {}: Missing destination operand for instruction '{}'. Expected format: {} <DEST> <SOURCE>", line_num + 1, opcode_str, opcode_str))?;
+                    let src_str = tokens.next().ok_or_else(|| format!("Line {}: Missing source operand for instruction '{}'. Expected format: {} <DEST> <SOURCE>", line_num + 1, opcode_str, opcode_str))?;
 
-                // Store parsed operand values.
-                operand1_val = dest_val;
-                operand2_val = src_val;
+                    // Parse destination and source operands using the helper function.
+                    let (dest_val, dest_type) = parse_reg_mem_operand(dest_str)
+                        .map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
+                    let (src_val, src_type) = parse_reg_mem_operand(src_str)
+                        .map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
 
-                // Encode addressing modes into the `mode_byte`:
-                // Bit 0 (0b01) for destination type: 1 if Memory, 0 if Register.
-                // Bit 1 (0b10) for source type: 1 if Memory, 0 if Register.
-                if dest_type == OperandType::Memory {
-                    mode_byte |= 0b01;
-                }
-                if src_type == OperandType::Memory {
-                    mode_byte |= 0b10;
-                }
+                    let mut mode_byte = 0; // Initialize mode byte to 0
 
-                // Assign the numerical opcode based on the instruction string.
-                opcode_val = match opcode_str {
-                    "Mov" => 0,
-                    "Add" => 1,
-                    "Sub" => 2,
-                    _ => unreachable!(), // This case should theoretically not be reached.
-                };
-            },
-            "Inc" | "Dec" => {
-                // These instructions expect one operand.
-                let op_str = tokens.next().ok_or_else(|| format!("Missing operand for instruction '{}'. Expected format: {} <OPERAND>", opcode_str, opcode_str))?;
-                let (op_val, op_type) = parse_reg_mem_operand(op_str)?;
+                    // Encode addressing modes into the `mode_byte`:
+                    // Bit 0 (0b01) for destination type: 1 if Memory, 0 if Register.
+                    // Bit 1 (0b10) for source type: 1 if Memory, 0 if Register.
+                    if dest_type == OperandType::Memory {
+                        mode_byte |= 0b01;
+                    }
+                    if src_type == OperandType::Memory {
+                        mode_byte |= 0b10;
+                    }
 
-                // Store the parsed operand value.
-                operand1_val = op_val;
-                // operand2_val remains 0, as it's not used by these single-operand instructions.
+                    // Assign the numerical opcode based on the instruction string.
+                    let opcode_val = match opcode_str {
+                        "Mov" => 0,
+                        "Add" => 2,
+                        "Sub" => 3,
+                        "Cmp" => 6, // Opcode for Cmp
+                        _ => unreachable!(), // This case should theoretically not be reached.
+                    };
+                    [opcode_val, mode_byte, dest_val, src_val]
+                },
+                "MovImm" => {
+                    // MovImm expects a destination (R#/M#) and an immediate value.
+                    let dest_str = tokens.next().ok_or_else(|| format!("Line {}: Missing destination operand for instruction '{}'. Expected format: {} <DEST> <VALUE>", line_num + 1, opcode_str, opcode_str))?;
+                    let value_str = tokens.next().ok_or_else(|| format!("Line {}: Missing immediate value for instruction '{}'. Expected format: {} <DEST> <VALUE>", line_num + 1, opcode_str, opcode_str))?;
 
-                // Encode addressing mode for the single operand into the `mode_byte`.
-                if op_type == OperandType::Memory {
-                    mode_byte |= 0b01; // Only set the destination bit as it's the only operand.
-                }
+                    let (dest_val, dest_type) = parse_reg_mem_operand(dest_str)
+                        .map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
+                    
+                    let immediate_value = value_str.parse::<u8>()
+                        .map_err(|e| format!("Line {}: Invalid immediate value '{}': {}", line_num + 1, value_str, e))?;
 
-                // Assign the numerical opcode.
-                opcode_val = match opcode_str {
-                    "Inc" => 3,
-                    "Dec" => 4,
-                    _ => unreachable!(),
-                };
-            },
-            "JmpAddr" => {
-                // JmpAddr expects one numeric address operand.
-                let addr_str = tokens.next().ok_or_else(|| format!("Missing address for instruction '{}'. Expected format: JmpAddr <ADDRESS>", opcode_str))?;
-                operand1_val = addr_str.parse::<u8>()
-                    .map_err(|e| format!("Invalid jump address '{}': {}", addr_str, e))?;
-                
-                // mode_byte and operand2_val remain 0 as they are not applicable for JmpAddr.
-                opcode_val = 5;
-            },
-            "HLT" => {
-                // HLT takes no operands. All operand values and mode_byte remain 0.
-                opcode_val = 6;
-            },
-            _ => return Err(format!("Unknown opcode: {}", opcode_str)), // Error for unrecognized instruction.
+                    let mut mode_byte = 0;
+                    // Encode destination type into mode_byte. Source type is irrelevant for MovImm.
+                    if dest_type == OperandType::Memory {
+                        mode_byte |= 0b01;
+                    }
+                    // Opcode for MovImm
+                    [1, mode_byte, dest_val, immediate_value]
+                },
+                "Inc" | "Dec" => {
+                    // These instructions expect one operand.
+                    let op_str = tokens.next().ok_or_else(|| format!("Line {}: Missing operand for instruction '{}'. Expected format: {} <OPERAND>", line_num + 1, opcode_str, opcode_str))?;
+                    let (op_val, op_type) = parse_reg_mem_operand(op_str)
+                        .map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
+
+                    let mut mode_byte = 0;
+                    // Encode addressing mode for the single operand into the `mode_byte`.
+                    if op_type == OperandType::Memory {
+                        mode_byte |= 0b01; // Only set the destination bit as it's the only operand.
+                    }
+
+                    // Assign the numerical opcode.
+                    let opcode_val = match opcode_str {
+                        "Inc" => 4,
+                        "Dec" => 5,
+                        _ => unreachable!(),
+                    };
+                    [opcode_val, mode_byte, op_val, 0] // operand2_val is 0 for single-operand instructions
+                },
+                // New conditional jump instructions
+                "JmpAddr" | "JmpEq" | "JmpNe" | "JmpGt" => { // JmpEq, JmpNe, JmpGt added here
+                    // These instructions expect one numeric address operand.
+                    let addr_str = tokens.next().ok_or_else(|| format!("Line {}: Missing address for instruction '{}'. Expected format: {} <ADDRESS>", line_num + 1, opcode_str, opcode_str))?;
+                    let address_val = addr_str.parse::<u8>()
+                        .map_err(|e| format!("Line {}: Invalid jump address '{}': {}", line_num + 1, addr_str, e))?;
+                    
+                    // mode_byte and operand2_val remain 0 as they are not applicable for jumps.
+                    let opcode_val = match opcode_str {
+                        "JmpAddr" => 7,
+                        "JmpEq" => 8,
+                        "JmpNe" => 9,
+                        "JmpGt" => 10,
+                        _ => unreachable!(),
+                    };
+                    [opcode_val, 0, address_val, 0]
+                },
+                "HLT" => {
+                    // HLT takes no operands. All operand values and mode_byte remain 0.
+                    [11, 0, 0, 0]
+                },
+                _ => return Err(format!("Line {}: Unknown opcode: {}", line_num + 1, opcode_str)), // Error for unrecognized instruction.
+            };
+            
+            // After parsing, check if there are any unexpected extra tokens on the line.
+            if tokens.next().is_some() {
+                return Err(format!("Line {}: Too many operands or unexpected tokens for instruction '{}' on line: '{}'.", line_num + 1, opcode_str, trimmed_part));
+            }
+
+            // Assemble the 4-byte instruction and add it to the program byte vector.
+            program.extend_from_slice(&instruction_bytes);
         }
-        
-        // After parsing, check if there are any unexpected extra tokens on the line.
-        if tokens.next().is_some() {
-            return Err(format!("Too many operands or unexpected tokens for instruction '{}' on line: '{}'.", opcode_str, trimmed_part));
-        }
-
-        // Assemble the 4-byte instruction and add it to the program byte vector.
-        program.push(opcode_val);
-        program.push(mode_byte);
-        program.push(operand1_val);
-        program.push(operand2_val);
     }
     
     Ok(program) // Return the successfully lexed program as a byte vector.

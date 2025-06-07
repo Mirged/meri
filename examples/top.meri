@@ -1,0 +1,19 @@
+// Program: Count R0 from 0 to 5 using a conditional loop.
+
+// Initialize counter R0 to 0
+MovImm R0 0;        // PC: 0-3 | R0 = 0
+
+// Loop_Start: (Actual PC address for this instruction is 4)
+MovImm R1 5;        // PC: 4-7  | Load loop limit (5) into R1
+Cmp R0 R1;          // PC: 8-11 | Compare R0 (counter) with R1 (limit). Sets Zero Flag (ZF) if R0 == R1.
+
+JmpEq 28;           // PC: 12-15| IF ZF is set (R0 == R1), JUMP to PC 28 (where HLT is).
+                    //           | If ZF is clear, continue to next instruction (PC 16).
+
+Inc R0;             // PC: 16-19| Increment R0 (counter)
+Mov M0 R0;          // PC: 20-23| Store R0's current value into M0 for observation
+
+JmpAddr 4;          // PC: 24-27| Unconditionally JUMP back to Loop_Start (PC 4)
+
+// End_Loop: (Actual PC address for this instruction is 28)
+HLT;                // PC: 28-31| Halt the program
