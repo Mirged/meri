@@ -55,42 +55,49 @@ fn load_program(cpu: &mut CPU, program: &[u8]) {
     }
 }
 
-fn run_program(cpu: &mut CPU, program_size: usize) {
+// run_program now returns a Result to indicate if an error occurred during execution (e.g., unknown instruction)
+fn run_program(cpu: &mut CPU, program_size: usize) -> Result<(), String> {
     while cpu.program_counter < program_size as u8 {
-        let opcode = cpu.memory[cpu.program_counter as usize];
+        let opcode_val = cpu.memory[cpu.program_counter as usize];
         let operand1 = cpu.memory[(cpu.program_counter + 1) as usize];
         let operand2 = cpu.memory[(cpu.program_counter + 2) as usize];
 
+        // Safely convert u8 to Instructions, propagating errors
+        let opcode = Instructions::try_from(opcode_val)?;
+
         if opcode as u8 == Instructions::HLT as u8 {
             println!("Halted.");
-            return;
+            return Ok(());
         }
-        execute_instruction(cpu, Instructions::from(opcode), operand1, operand2);
+        execute_instruction(cpu, opcode, operand1, operand2);
 
         // Move to the next instruction
         cpu.program_counter += 3;
     }
+    Ok(())
 }
 
-impl From<u8> for Instructions {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for Instructions {
+    type Error = String; // Define the error type for the conversion
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Instructions::MovRegReg,
-            1 => Instructions::AddRegReg,
-            2 => Instructions::SubRegReg,
-            3 => Instructions::IncReg,
-            4 => Instructions::DecReg,
-            5 => Instructions::JmpAddr,
-            6 => Instructions::MovRegMem,
-            7 => Instructions::MovMemReg,
-            8 => Instructions::AddRegMem,
-            9 => Instructions::AddMemReg,
-            10 => Instructions::SubRegMem,
-            11 => Instructions::SubMemReg,
-            12 => Instructions::IncMem,
-            13 => Instructions::DecMem,
-            14 => Instructions::HLT,
-            _ => panic!("Unknown instruction: {}", value),
+            0 => Ok(Instructions::MovRegReg),
+            1 => Ok(Instructions::AddRegReg),
+            2 => Ok(Instructions::SubRegReg),
+            3 => Ok(Instructions::IncReg),
+            4 => Ok(Instructions::DecReg),
+            5 => Ok(Instructions::JmpAddr),
+            6 => Ok(Instructions::MovRegMem),
+            7 => Ok(Instructions::MovMemReg),
+            8 => Ok(Instructions::AddRegMem),
+            9 => Ok(Instructions::AddMemReg),
+            10 => Ok(Instructions::SubRegMem),
+            11 => Ok(Instructions::SubMemReg),
+            12 => Ok(Instructions::IncMem),
+            13 => Ok(Instructions::DecMem),
+            14 => Ok(Instructions::HLT),
+            _ => Err(format!("Unknown instruction opcode: {}", value)), // Return an error
         }
     }
 }
@@ -105,7 +112,9 @@ pub fn run_emulation(program_vector: Vec<u8>, print_usage: bool) {
 
     let program = &program_vector[..];
     load_program(&mut cpu, &program);
-    run_program(&mut cpu, program.len());
+    if let Err(e) = run_program(&mut cpu, program.len()) {
+        eprintln!("Emulation error: {}", e);
+    }
     if print_usage {
         println!("################### CPU STATE AFTER PROGRAM ###################");
         println!("PC = {}", cpu.program_counter);
